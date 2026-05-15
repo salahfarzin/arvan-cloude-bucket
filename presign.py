@@ -1,5 +1,6 @@
 import os
 import sys
+
 import boto3
 from dotenv import load_dotenv
 
@@ -35,6 +36,3 @@ if __name__ == "__main__":
     expires_arg = int(sys.argv[2]) if len(sys.argv) > 2 else 3600
 
     print(presign(key_arg, expires_arg))
-
-
-

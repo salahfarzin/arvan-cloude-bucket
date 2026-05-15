@@ -17,19 +17,19 @@ help:
 	@echo "  presign       ARGS='<key> [secs]'  Generate a pre-signed URL"
 
 install:
-	pip install -r requirements.txt
+	python3 -m pip install -r requirements.txt
 
 install-dev:
-	pip install -r requirements-dev.txt
+	python3 -m pip install -r requirements-dev.txt
 
 format:
-	ruff format .
+	python3 -m ruff format .
 
 lint:
-	ruff check .
+	python3 -m ruff check .
 
 security:
-	bandit -r . -c pyproject.toml
+	python3 -m bandit -r . -c pyproject.toml
 
 check: lint security
 
