@@ -1,7 +1,8 @@
+import math
 import os
 import sys
-import math
 from typing import Optional
+
 import boto3
 from dotenv import load_dotenv
 
@@ -23,15 +24,23 @@ def get_client():
 def _print_progress(transferred: int, total: int):
     pct = transferred / total * 100
     bar = int(pct / 2)
-    print(f"\r  [{'#' * bar}{'-' * (50 - bar)}] {pct:.1f}%  {transferred // (1024*1024)}MB/{total // (1024*1024)}MB", end="", flush=True)
+    transferred_mb = transferred // (1024 * 1024)
+    total_mb = total // (1024 * 1024)
+    print(
+        f"\r  [{'#' * bar}{'-' * (50 - bar)}] {pct:.1f}%  {transferred_mb}MB/{total_mb}MB",
+        end="",
+        flush=True,
+    )
 
 
 def upload_simple(client, file_path: str, bucket: str, key: str):
     file_size = os.path.getsize(file_path)
     print(f"Uploading '{file_path}' → s3://{bucket}/{key}")
     client.upload_file(
-        file_path, bucket, key,
-        Callback=lambda b: _print_progress(getattr(upload_simple, '_sent', 0) + b, file_size)
+        file_path,
+        bucket,
+        key,
+        Callback=lambda b: _print_progress(getattr(upload_simple, "_sent", 0) + b, file_size),
     )
     print("\nUpload complete.")
 
@@ -39,7 +48,8 @@ def upload_simple(client, file_path: str, bucket: str, key: str):
 def upload_multipart(client, file_path: str, bucket: str, key: str):
     file_size = os.path.getsize(file_path)
     total_parts = math.ceil(file_size / PART_SIZE)
-    print(f"Uploading '{file_path}' → s3://{bucket}/{key} ({file_size // (1024*1024)} MB, {total_parts} parts)")
+    size_mb = file_size // (1024 * 1024)
+    print(f"Uploading '{file_path}' → s3://{bucket}/{key} ({size_mb} MB, {total_parts} parts)")
 
     mpu = client.create_multipart_upload(Bucket=bucket, Key=key)
     upload_id = mpu["UploadId"]

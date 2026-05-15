@@ -2,9 +2,12 @@ import hashlib
 import os
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import boto3
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,6 +15,7 @@ load_dotenv()
 PART_SIZE = int(os.getenv("PART_SIZE_MB", 8)) * 1024 * 1024
 MULTIPART_THRESHOLD = int(os.getenv("MULTIPART_THRESHOLD_MB", 16)) * 1024 * 1024
 MAX_CONCURRENCY = int(os.getenv("DOWNLOAD_CONCURRENCY", 10))
+MAX_RETRIES = int(os.getenv("DOWNLOAD_RETRIES", 3))
 
 
 def get_client():
@@ -47,7 +51,7 @@ def _resolve_filename(head: dict, key: str) -> str:
 
 
 def _md5(file_path: str) -> str:
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
             h.update(chunk)
@@ -89,7 +93,11 @@ def download(key: str, dest_path: str = None):
     filename = _resolve_filename(head, key)
     dest_path = _resolve_dest(dest_path, filename)
 
-    print(f"Downloading s3://{bucket}/{key} → '{dest_path}' ({total_size // (1024 * 1024)} MB, concurrency={MAX_CONCURRENCY})")
+    size_mb = total_size // (1024 * 1024)
+    print(
+        f"Downloading s3://{bucket}/{key} → '{dest_path}'"
+        f" ({size_mb} MB, concurrency={MAX_CONCURRENCY})"
+    )
 
     # Small files: single-threaded download
     if total_size <= MULTIPART_THRESHOLD:
@@ -129,13 +137,37 @@ def download(key: str, dest_path: str = None):
                 _print_progress(transferred[0], total_size)
             return
 
-        resp = client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{end}")
-        with open(part_file, "wb") as f:
-            for chunk in resp["Body"].iter_chunks(chunk_size=1024 * 1024):
-                f.write(chunk)
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                resp = client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{end}")
+                written = 0
+                with open(part_file, "wb") as f:
+                    for chunk in resp["Body"].iter_chunks(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                        written += len(chunk)
+                        with lock:
+                            transferred[0] += len(chunk)
+                            _print_progress(transferred[0], total_size)
+
+                if written != expected:
+                    raise ValueError(f"Part {pnum}: wrote {written}B, expected {expected}B")
+                return
+
+            except (BotoCoreError, ClientError, ValueError) as exc:
+                # Remove incomplete part file so it won't be mistaken as complete on resume
+                if os.path.exists(part_file):
+                    os.remove(part_file)
+                # Undo progress counter for the failed attempt
                 with lock:
-                    transferred[0] += len(chunk)
-                    _print_progress(transferred[0], total_size)
+                    transferred[0] -= written if "written" in dir() else 0
+
+                if attempt == MAX_RETRIES:
+                    msg = f"Part {pnum} failed after {MAX_RETRIES} retries: {exc}"
+                    raise RuntimeError(msg) from exc
+
+                wait = 2**attempt
+                print(f"\n  Part {pnum} attempt {attempt} failed ({exc}), retrying in {wait}s...")
+                time.sleep(wait)
 
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENCY) as executor:
         futures = {executor.submit(_download_part, *part): part for part in parts}
