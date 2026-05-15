@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Running pre-push quality checks..."
+
+echo "  → lint"
+python3 -m ruff check .
+
+echo "  → format"
+python3 -m ruff format --check .
+
+echo "  → security"
+python3 -m bandit -r . -c pyproject.toml -q
+
+echo "All checks passed."

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev format lint security check create-bucket list upload download presign
+.PHONY: help install install-dev install-hooks format lint security check create-bucket list upload download presign
 
 help:
 	@echo "Usage: make <target> [ARGS='...']"
@@ -6,6 +6,7 @@ help:
 	@echo "Targets:"
 	@echo "  install                      Install Python dependencies"
 	@echo "  install-dev                  Install dev dependencies (ruff, bandit)"
+	@echo "  install-hooks                Install git pre-push hook"
 	@echo "  format                       Auto-format code with ruff"
 	@echo "  lint                         Lint code with ruff"
 	@echo "  security                     Run security checks with bandit"
@@ -21,6 +22,11 @@ install:
 
 install-dev:
 	python3 -m pip install -r requirements-dev.txt
+
+install-hooks:
+	cp hooks/pre-push .git/hooks/pre-push
+	chmod +x .git/hooks/pre-push
+	@echo "pre-push hook installed."
 
 format:
 	python3 -m ruff format .
