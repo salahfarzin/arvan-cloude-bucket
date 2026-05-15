@@ -51,7 +51,7 @@ def _resolve_filename(head: dict, key: str) -> str:
 
 
 def _md5(file_path: str) -> str:
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
             h.update(chunk)
