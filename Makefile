@@ -1,10 +1,15 @@
-.PHONY: help install create-bucket list upload download presign
+.PHONY: help install install-dev format lint security check create-bucket list upload download presign
 
 help:
 	@echo "Usage: make <target> [ARGS='...']"
 	@echo ""
 	@echo "Targets:"
 	@echo "  install                      Install Python dependencies"
+	@echo "  install-dev                  Install dev dependencies (ruff, bandit)"
+	@echo "  format                       Auto-format code with ruff"
+	@echo "  lint                         Lint code with ruff"
+	@echo "  security                     Run security checks with bandit"
+	@echo "  check                        Run lint + security together"
 	@echo "  create-bucket ARGS='<name>'  Create a new bucket"
 	@echo "  list          [ARGS='<pfx>'] List objects (optional prefix filter)"
 	@echo "  upload        ARGS='<file> [key]'  Upload a file"
@@ -13,6 +18,20 @@ help:
 
 install:
 	pip install -r requirements.txt
+
+install-dev:
+	pip install -r requirements-dev.txt
+
+format:
+	ruff format .
+
+lint:
+	ruff check .
+
+security:
+	bandit -r . -c pyproject.toml
+
+check: lint security
 
 create-bucket:
 	python3 create_bucket.py $(ARGS)
